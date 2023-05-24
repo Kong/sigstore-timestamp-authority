@@ -37,6 +37,7 @@ import (
 	"github.com/sigstore/timestamp-authority/pkg/signer"
 	tsx509 "github.com/sigstore/timestamp-authority/pkg/x509"
 	"google.golang.org/protobuf/types/known/durationpb"
+	"github.com/google/uuid"
 
 	// Register the provider-specific plugins
 	"github.com/sigstore/sigstore/pkg/signature/kms"
@@ -74,6 +75,7 @@ var (
 	intermediateKMSKey = flag.String("intermediate-kms-resource", "", "Resource path to the asymmetric signing KMS key for the intermediate CA, starting with gcpkms://, awskms://, azurekms:// or hashivault://")
 	// leafKMSKey or Tink flags required
 	leafKMSKey     = flag.String("leaf-kms-resource", "", "Resource path to the asymmetric signing KMS key for the leaf, starting with gcpkms://, awskms://, azurekms:// or hashivault://")
+	certificateIdPrefix = flag.String("certificate-id-prefix", "subordinate", "Random prefix for certificate when using Enterprise tier")
 	tinkKeysetPath = flag.String("tink-keyset-path", "", "Path to Tink keyset")
 	tinkKmsKey     = flag.String("tink-kms-resource", "", "Resource path to symmetric encryption KMS key to decrypt Tink keyset, starting with gcp-kms:// or aws-kms://")
 	outputPath     = flag.String("output", "", "Path to the output file")
@@ -112,6 +114,7 @@ func fetchCertificateChain(ctx context.Context, parent, intermediateKMSKey, leaf
 
 	csr := &privatecapb.CreateCertificateRequest{
 		Parent: parent,
+		CertificateId: fmt.Sprintf("%s-%s", *certificateIdPrefix, uuid.New().String()),
 		Certificate: &privatecapb.Certificate{
 			// Default to a very large lifetime - CA Service will truncate the
 			// lifetime to be no longer than the root's lifetime.
@@ -138,8 +141,8 @@ func fetchCertificateChain(ctx context.Context, parent, intermediateKMSKey, leaf
 					},
 					SubjectConfig: &privatecapb.CertificateConfig_SubjectConfig{
 						Subject: &privatecapb.Subject{
-							CommonName:   "sigstore-tsa-intermediate",
-							Organization: "sigstore.dev",
+							CommonName:   "kong-sigstore-tsa-intermediate",
+							Organization: "Kong Inc",
 						},
 					},
 				},
@@ -216,8 +219,8 @@ func fetchCertificateChain(ctx context.Context, parent, intermediateKMSKey, leaf
 	cert := &x509.Certificate{
 		SerialNumber: sn,
 		Subject: pkix.Name{
-			CommonName:   "sigstore-tsa",
-			Organization: []string{"sigstore.dev"},
+			CommonName:   "kong-sigstore-tsa",
+			Organization: []string{"Kong Inc"},
 		},
 		SubjectKeyId: skid,
 		NotBefore:    intermediate.NotBefore,
@@ -258,6 +261,7 @@ func main() {
 	if *leafKMSKey == "" && *tinkKeysetPath == "" {
 		log.Fatal("either leaf-kms-resource or tink-keyset-path must be set")
 	}
+
 	if *tinkKeysetPath != "" && *tinkKmsKey == "" {
 		log.Fatal("tink-keyset-path must be set with tink-kms-resource must be set")
 	}
